@@ -1,0 +1,80 @@
+AWS-Admin-Python-Scripts:
+=========================
+#Delete ununsed EBS Volumes
+==============================
+import boto3
+def delete_unused_ebs_volumes():
+    ec2 = boto3.client('ec2')
+    volumes = ec2.describe_volumes(Filters=[{'Name': 'status', 'Values': ['available']}])
+    for volume in volumes['Volumes']:
+        ec2.delete_volume(VolumeId=volume['VolumeId'])
+        print(f"Deleted volume: {volume['VolumeId']}")
+# Example usage:
+delete_unused_ebs_volumes()
+#
+#Rotate IAM keys for users:
+===========================
+import boto3
+def rotate_iam_keys(username):
+    iam = boto3.client('iam')
+    old_keys = iam.list_access_keys(UserName=username)['AccessKeyMetadata']
+    for key in old_keys:
+        iam.delete_access_key(UserName=username, AccessKeyId=key['AccessKeyId'])
+    new_key = iam.create_access_key(UserName=username)
+    print(f"New Access Key: {new_key['AccessKey']['AccessKeyId']}")
+# Example usage:
+rotate_iam_keys('existing-user')
+#
+#Restart unhealthy instances in aws:
+====================================
+import boto3
+def restart_unhealthy_instances():
+    ec2 = boto3.client('ec2')
+    statuses = ec2.describe_instance_status(IncludeAllInstances=True)
+    for status in statuses['InstanceStatuses']:
+        if status['InstanceStatus']['Status'] != 'ok':
+            ec2.reboot_instances(InstanceIds=[status['InstanceId']])
+            print(f"Rebooted instance: {status['InstanceId']}")
+# Example usage:
+restart_unhealthy_instances()
+#
+#Stop_idle_instances_in_aws:
+============================
+import boto3
+def stop_idle_instances():
+    ec2 = boto3.client('ec2')
+    instances = ec2.describe_instances(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            if instance['CpuOptions']['CoreCount'] < 5:
+                ec2.stop_instances(InstanceIds=[instance['InstanceId']])
+                print(f"Stopped idle instance {instance['InstanceId']}")
+# Example usage:
+stop_idle_instances()
+#
+#Create AMI from ec2 instance
+=============================
+#
+import boto3
+def create_ami(instance_id, ami_name):
+    ec2 = boto3.client('ec2')
+    ec2.create_image(InstanceId=instance_id, Name=ami_name, NoReboot=True)
+    print(f"AMI {ami_name} created for instance {instance_id}")
+# Example usage:
+create_ami('i-1234567890abcdef0', 'my-ami-backup')
+#
+#List IAM users and profiles attached
+=======================================
+import boto3
+
+def list_iam_users_and_policies():
+    iam = boto3.client('iam')
+    users = iam.list_users()['Users']
+    for user in users:
+        print(f"User: {user['UserName']}")
+        policies = iam.list_attached_user_policies(UserName=user['UserName'])['AttachedPolicies']
+        for policy in policies:
+            print(f"  Policy: {policy['PolicyName']}")
+
+# Example usage:
+list_iam_users_and_policies()
