@@ -1,0 +1,203 @@
+Bash-script to start instances based on tag:
+============================================
+instance_ids=$(aws ec2 describe-instances  --filters "Name=tag:project,Values=labtest"    --query "Reservations[*].Instances[?State.Name=='stopped'].InstanceId" --output text)
+
+if [ -z "$instance_ids" ]; then
+  echo "No stopped instances found with tag role:bastion1"
+else
+  echo "Starting instances: $instance_ids"
+  aws ec2 start-instances --instance-ids $instance_ids
+fi
+
+
+#SSH to multiple servers and copy files and run;Make servers.txt has list of servers
+cat servers.txt | xargs -I {} bash -c 'scp -i ~/.ssh/id_rsa script.sh ec2-user@{}:/tmp && ssh -i ~/.ssh/id_rsa ec2-user@{} "bash /tmp/script.sh"'
+#Restrict to 5 jobs in parallel
+cat servers.txt | xargs -P 5 -I {} ssh -i ~/.ssh/id_rsa ec2-user@{} 'bash -s' < script.sh
+#ssh to multiple servers using password
+cat servers.txt | xargs -I {} ssh user@{} 'bash -s' < script.sh
+#ssh to copy and run script
+cat servers.txt | xargs -I {} bash -c 'scp script.sh user@{}:/tmp && ssh user@{} "bash /tmp/script.sh"'
+
+Dockerfile with ARGS:
+=====================
+# Use ARG for Node.js version
+ARG NODE_VERSION=18
+ARG PYTHON_VERSION=3.9
+ARG APP_ENV=development
+ARG BUILD_DATE
+ARG CUSTOM_MESSAGE="Hello from Docker!"
+FROM node:${NODE_VERSION}-alpine AS builder
+
+ENV APP_DIR=/app
+ENV DB_HOST=localhost
+ENV DB_NAME=test_db
+
+ENV DB_USER=app_user
+ENV TABLE_NAME=my_app_data
+
+WORKDIR ${APP_DIR}
+
+COPY package*.json ./
+RUN npm install --production
+
+COPY . .
+
+# Final stage
+FROM node:${NODE_VERSION}-alpine
+
+WORKDIR ${APP_DIR}
+
+COPY --from=builder ${APP_DIR} .
+
+CMD ["node", "app.js"]
+
+aws ecr get-login-password --region your-aws-region | docker login --username AWS --password-stdin YOUR_ECR_REPOSITORY_URI ##To login to ECR Registry
+
+#SHARE AN OUTAGE YOU HELPED DEBUG. RCA AND FIX?
+ Our ingress had 502s but no pod failures.
+ 📌 RCA: Nodes hit disk pressure → kubelet evicted pods → endpoints vanished.
+ ✅ Fix: disk alerts + eviction thresholds + daemon for monitoring ephemeral storage.
+
+
+K8s Canary Deployment:
+======================
+#sample deployment for old version:
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: base-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.echo.pod.name.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: base-svc
+            port:
+              number: 80
+			  
+using canary-ingress annotation for canary deployment for new version
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "30"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.echo.pod.name.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: canary-svc
+            port:
+              number: 80
+
+K8s Rolling Deployment:
+=======================
+Here is an example of a rolling deployment YAML file in Kubernetes
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp-container
+        image: myapp:v1
+        ports:
+        - containerPort: 8080
+
+AWS ALB as ingress:
+===================
+# alb-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/load-balancer-name: "my-app-alb"
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /app1
+            pathType: Prefix
+            backend:
+              service:
+                name: app1
+                port:
+                  number: 80
+          - path: /app2
+            pathType: Prefix
+            backend:
+              service:
+                name: app2
+                port:
+                  number: 80
+	
+k8s templates for creating POD with resource limit:
+===================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: httpd-pod
+spec:
+  containers:
+  - name: httpd-container
+    image: httpd:latest
+    resources:
+      requests:
+        memory: "15Mi"
+        cpu: "100m"
+      limits:
+        memory: "20Mi"
+        cpu: "100m"
+		
+
+---	
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: devops
+spec:
+  schedule: "*/6 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cron-devops
+            image: httpd:latest
+            imagePullPolicy: IfNotPresent
+            command: ["echo", "Welcome to xfusioncorp!"]
+          restartPolicy: OnFailure			
