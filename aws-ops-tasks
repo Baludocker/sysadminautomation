@@ -78,3 +78,24 @@ def list_iam_users_and_policies():
 
 # Example usage:
 list_iam_users_and_policies()
+
+#S3 audit
+==========
+import boto3
+
+s3 = boto3.client('s3')
+
+def audit_s3_buckets():
+    buckets = s3.list_buckets()['Buckets']
+    for bucket in buckets:
+        name = bucket['Name']
+        print(f"Bucket: {name}")
+        try:
+            tags = s3.get_bucket_tagging(Bucket=name)['TagSet']
+            for tag in tags:
+                print(f"  {tag['Key']}: {tag['Value']}")
+        except Exception:
+            print("  No tags found or access denied.")
+
+if __name__ == "__main__":
+    audit_s3_buckets()
